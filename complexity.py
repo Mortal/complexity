@@ -82,7 +82,8 @@ class Visitor(VisitorBase):
             print("%s:\n%s" % (n, e))
         self.pop_scope()
         if self.unhandled:
-            print(self.unhandled)
+            print("Unhandled types: %s" %
+                  ', '.join(str(c) for c in self.unhandled))
             self.unhandled = type(self.unhandled)()
 
     def visit_Assign(self, node):
@@ -99,6 +100,8 @@ class Visitor(VisitorBase):
             op = type(op)
         if op == ast.Add:
             return left + right
+        elif op == ast.Mult:
+            return left * right
         else:
             raise TypeError("Unknown op %s" % (op,))
 
@@ -131,7 +134,36 @@ class Visitor(VisitorBase):
             itervar = self.current_scope[node.target.id]
             self.visit_children(node)
             for n, e in self.current_scope._effects.items():
-                sc.add_effect(n, sympy.summation(e, (itervar, a, b - 1)))
+                nsymb = self.current_scope[n]
+                if not e.has(nsymb) and not e.has(itervar):
+                    sc.add_effect(n, e)
+                    continue
+                cterm, iterms = e.as_coeff_add(nsymb)
+                if not iterms:
+                    sc.add_effect(n, cterm.subs(itervar, b - 1))
+                    continue
+                iterm, = iterms
+                coeff, exponent = iterm.as_coeff_exponent(nsymb)
+                if not exponent.is_Number:
+                    raise ValueError("Exponent %s is has free symbols" % (exponent,))
+                if not coeff.is_Number:
+                    raise ValueError("Coefficient %s is has free symbols" % (coeff,))
+                if exponent == 1:
+                    if coeff == 1:
+                        ee = nsymb + sympy.summation(cterm, (itervar, a, b - 1))
+                        sc.add_effect(n, ee)
+                    elif 0 < coeff < 1:
+                        # In the loop, we set x = a + b x, where 0 < b < 1
+                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
+                    elif coeff > 1:
+                        # In the loop, we set x = a + b x, where 0 < b < 1
+                        lims = [(s, sympy.oo) for s in 
+                        ee = sympy.Order(
+                        sc.add_effect(
+                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
+                    elif coeff < 0:
+                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
+                elif exponent > 1:
             self.pop_scope()
         else:
             raise ValueError("Cannot handle non-range for")
