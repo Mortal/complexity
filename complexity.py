@@ -63,6 +63,18 @@ class Scope(object):
             for n in parameters
         }
         self._effects = {}
+        self._output = None
+
+    @property
+    def output(self):
+        return self._output
+
+    @output.setter
+    def output(self, x):
+        if self._output is None:
+            self._output = x
+        else:
+            raise AttributeError("Output is already set")
 
     def __getitem__(self, name):
         if isinstance(name, ast.AST):
@@ -79,6 +91,7 @@ class Scope(object):
             raise TypeError("Try to add_effect on a %s" % (name,))
         if expr is None:
             raise TypeError("Try to add_effect with None")
+        self._locals.setdefault(name, sympy.Dummy(name))
         sub = {
             self[n]: e
             for n, e in self._effects.items()
@@ -116,6 +129,9 @@ class Visitor(VisitorBase):
     def visit_FunctionDef(self, node):
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
         self.visit(node.body)
+        print("Function %s:" % (node.name,))
+        if self.current_scope.output is not None:
+            print("Result:\n%s" % (self.current_scope.output,))
         for n, e in self.current_scope._effects.items():
             print("%s:\n%s" % (n, e))
         self.pop_scope()
@@ -123,6 +139,10 @@ class Visitor(VisitorBase):
             print("Unhandled types: %s" %
                   ', '.join(str(c) for c in self.unhandled))
             self.unhandled = type(self.unhandled)()
+        print('')
+
+    def visit_Return(self, node):
+        self.current_scope.output = self.visit(node.value)
 
     def visit_Assign(self, node):
         target, = node.targets
