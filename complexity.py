@@ -20,22 +20,32 @@ class VisitorBase(ast.NodeVisitor):
         self.current_scope = self.scope_stack.pop()
 
     def visit(self, node):
+        if isinstance(node, list):
+            for x in node:
+                self.visit(x)
+            return
         try:
             return super(VisitorBase, self).visit(node)
         except:
-            try:
-                lineno = node.lineno
-                col_offset = node.col_offset
-            except AttributeError:
-                lineno = col_offset = None
-            print('At node %s' % node, file=sys.stderr)
-            if lineno is not None and lineno > 0:
-                print(self._source_lines[lineno - 1], file=sys.stderr)
-                print(' ' * col_offset + '^', file=sys.stderr)
+            self.source_backtrace(node, sys.stderr)
             raise
 
+    def source_backtrace(self, node, file):
+        try:
+            lineno = node.lineno
+            col_offset = node.col_offset
+        except AttributeError:
+            lineno = col_offset = None
+        print('At node %s' % node, file=file)
+        if lineno is not None and lineno > 0:
+            print(self._source_lines[lineno - 1], file=file)
+            print(' ' * col_offset + '^', file=file)
+
     def generic_visit(self, node):
-        self.unhandled.add(type(node))
+        if type(node) not in self.unhandled:
+            self.source_backtrace(node, sys.stderr)
+            print("%s unhandled" % (type(node).__name__,), file=sys.stderr)
+        self.unhandled.add(type(node).__name__)
 
     def visit_children(self, node):
         for child in ast.iter_child_nodes(node):
@@ -69,15 +79,43 @@ class Scope(object):
             raise TypeError("Try to add_effect on a %s" % (name,))
         if expr is None:
             raise TypeError("Try to add_effect with None")
-        if name in self._effects:
-            expr = expr.subs(self[name], self._effects[name])
-        self._effects[name] = expr
+        sub = {
+            self[n]: e
+            for n, e in self._effects.items()
+        }
+        self._effects[name] = expr.subs(sub)
+
+
+def repeated(n, i, e, a, b):
+    # let n_a = n; n_{a+k+1} = e(n=n_{a+k}, i=a+k+1)
+    # return n_b
+    if e.has(i):
+        if e.has(n):
+            if not (e - n).has(n):
+                term = e - n
+                return n + sympy.summation(term, (i, a, b))
+            raise NotImplementedError("has i and n")
+        else:
+            raise NotImplementedError("has i but not n")
+    else:
+        if e.has(n):
+            if not (e - n).has(n):
+                term = e - n
+                return n + term * (b - a + 1)
+            c, args = e.as_coeff_add(n)
+            arg, = args
+            if not (arg / n).simplify().has(n):
+                coeff = arg / n
+                return n + coeff ** (b - a + 1) * n
+            raise NotImplementedError
+        else:
+            return (b - a + 1) * e
 
 
 class Visitor(VisitorBase):
     def visit_FunctionDef(self, node):
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
-        self.visit_children(node)
+        self.visit(node.body)
         for n, e in self.current_scope._effects.items():
             print("%s:\n%s" % (n, e))
         self.pop_scope()
@@ -132,38 +170,16 @@ class Visitor(VisitorBase):
             sc = self.current_scope
             self.push_scope(Scope(self.current_scope, [node.target.id]))
             itervar = self.current_scope[node.target.id]
-            self.visit_children(node)
+            self.visit(node.body)
             for n, e in self.current_scope._effects.items():
                 nsymb = self.current_scope[n]
-                if not e.has(nsymb) and not e.has(itervar):
+                if e.has(nsymb):
+                    ee = repeated(nsymb, itervar, e, a, b - 1)
+                    sc.add_effect(n, ee)
+                elif e.has(itervar):
+                    sc.add_effect(n, e.subs(itervar, b - 1))
+                else:
                     sc.add_effect(n, e)
-                    continue
-                cterm, iterms = e.as_coeff_add(nsymb)
-                if not iterms:
-                    sc.add_effect(n, cterm.subs(itervar, b - 1))
-                    continue
-                iterm, = iterms
-                coeff, exponent = iterm.as_coeff_exponent(nsymb)
-                if not exponent.is_Number:
-                    raise ValueError("Exponent %s is has free symbols" % (exponent,))
-                if not coeff.is_Number:
-                    raise ValueError("Coefficient %s is has free symbols" % (coeff,))
-                if exponent == 1:
-                    if coeff == 1:
-                        ee = nsymb + sympy.summation(cterm, (itervar, a, b - 1))
-                        sc.add_effect(n, ee)
-                    elif 0 < coeff < 1:
-                        # In the loop, we set x = a + b x, where 0 < b < 1
-                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
-                    elif coeff > 1:
-                        # In the loop, we set x = a + b x, where 0 < b < 1
-                        lims = [(s, sympy.oo) for s in 
-                        ee = sympy.Order(
-                        sc.add_effect(
-                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
-                    elif coeff < 0:
-                        raise ValueError("Recurrence involving %s%s" % (coeff, n))
-                elif exponent > 1:
             self.pop_scope()
         else:
             raise ValueError("Cannot handle non-range for")
