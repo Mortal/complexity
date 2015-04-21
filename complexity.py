@@ -91,7 +91,10 @@ class Scope(object):
             raise TypeError("Try to add_effect on a %s" % (name,))
         if expr is None:
             raise TypeError("Try to add_effect with None")
-        self._locals.setdefault(name, sympy.Dummy(name))
+        try:
+            self[name]
+        except KeyError:
+            self._locals[name] = sympy.Dummy(name)
         sub = {
             self[n]: e
             for n, e in self._effects.items()
@@ -130,10 +133,12 @@ class Visitor(VisitorBase):
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
         self.visit(node.body)
         print("Function %s:" % (node.name,))
+        def BigO(e):
+            return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo))
         if self.current_scope.output is not None:
             print("Result:\n%s" % (self.current_scope.output,))
         for n, e in self.current_scope._effects.items():
-            print("%s:\n%s" % (n, e))
+            print("%s:\n%s = O(%s)" % (n, e, BigO(e).args[0]))
         self.pop_scope()
         if self.unhandled:
             print("Unhandled types: %s" %
