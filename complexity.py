@@ -76,9 +76,22 @@ class Scope(object):
         else:
             raise AttributeError("Output is already set")
 
+    @property
+    def changed_vars(self):
+        return set(self[v] for v in self._effects.keys())
+
+    def affect(self, expr):
+        sub = {
+            self[n]: e
+            for n, e in self._effects.items()
+        }
+        return expr.subs(sub)
+
     def __getitem__(self, name):
         if isinstance(name, ast.AST):
             raise TypeError("Try to lookup a %s" % (name,))
+        elif isinstance(name, sympy.Symbol):
+            return name
         try:
             return self._locals[name]
         except KeyError:
@@ -91,15 +104,13 @@ class Scope(object):
             raise TypeError("Try to add_effect on a %s" % (name,))
         if expr is None:
             raise TypeError("Try to add_effect with None")
-        try:
-            self[name]
-        except KeyError:
-            self._locals[name] = sympy.Dummy(name)
-        sub = {
-            self[n]: e
-            for n, e in self._effects.items()
-        }
-        self._effects[name] = expr.subs(sub)
+        if isinstance(name, str):
+            try:
+                name = self[name]
+            except KeyError:
+                self._locals[name] = sympy.Dummy(name)
+                name = self._locals[name]
+        self._effects[name] = self.affect(expr)
 
 
 def repeated(n, i, e, a, b):
@@ -125,7 +136,11 @@ def repeated(n, i, e, a, b):
                 return n + coeff ** (b - a + 1) * n
             raise NotImplementedError
         else:
-            return (b - a + 1) * e
+            return e
+
+
+def termination_function(e):
+    return e.gts - e.lts
 
 
 class Visitor(VisitorBase):
@@ -138,7 +153,11 @@ class Visitor(VisitorBase):
         if self.current_scope.output is not None:
             print("Result:\n%s" % (self.current_scope.output,))
         for n, e in self.current_scope._effects.items():
-            print("%s:\n%s = O(%s)" % (n, e, BigO(e).args[0]))
+            ee = BigO(e)
+            if ee.args:
+                print("%s:\n%s = O(%s)" % (n, e, ee.args[0]))
+            else:
+                print("%s:\n%s = O(??)" % (n, e))
         self.pop_scope()
         if self.unhandled:
             print("Unhandled types: %s" %
@@ -158,13 +177,36 @@ class Visitor(VisitorBase):
     def visit_BinOp(self, node):
         return self.binop(self.visit(node.left), node.op, self.visit(node.right))
 
+    def visit_Compare(self, node):
+        left = self.visit(node.left)
+        rights = [self.visit(c) for c in node.comparators]
+        lefts = [left] + rights[:-1]
+        res = None
+        for left, op, right in zip(lefts, node.ops, rights):
+            r = self.binop(left, op, right)
+            if res is None:
+                res = r
+            else:
+                res = self.binop(res, ast.And, r)
+        return res
+
     def binop(self, left, op, right):
         if isinstance(op, ast.AST):
             op = type(op)
         if op == ast.Add:
             return left + right
+        elif op == ast.Sub:
+            return left - right
         elif op == ast.Mult:
             return left * right
+        elif op == ast.Div:
+            return left / right
+        elif op == ast.And:
+            return sympy.And(left, right)
+        elif op == ast.LtE:
+            return sympy.LessThan(left, right)
+        elif op == ast.Gt:
+            return sympy.StrictGreaterThan(left, right)
         else:
             raise TypeError("Unknown op %s" % (op,))
 
@@ -208,6 +250,29 @@ class Visitor(VisitorBase):
             self.pop_scope()
         else:
             raise ValueError("Cannot handle non-range for")
+
+    def visit_While(self, node):
+        test = self.visit(node.test)
+        test_vars = test.free_symbols
+        sc = self.current_scope
+        self.push_scope(Scope(self.current_scope, []))
+        self.visit(node.body)
+        it_vars = test_vars & self.current_scope.changed_vars
+        if not it_vars:
+            raise ValueError("No iteration variables were changed: %s %s" %
+                             (test_vars, self.current_scope.changed_vars))
+        effects = {}
+        itervar = sympy.Dummy('itervar')
+        imax = sympy.Dummy('imax')
+        for n, e in self.current_scope._effects.items():
+            nsymb = self.current_scope[n]
+            effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 0, imax))
+        o = termination_function(test).subs(effects)
+        iterations = sympy.solve(o, imax, dict=True)[0][imax]
+        self.pop_scope()
+        for n, e in effects.items():
+            ee = e.subs(imax, iterations)
+            self.current_scope.add_effect(n, ee)
 
 
 def main():

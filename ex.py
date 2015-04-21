@@ -13,17 +13,26 @@ def Loop2(n):
 def Loop3(n):
     i = 0
     j = n
+    s = 0
     while i <= j:
         i = i + 1
         j = j - 1
+        s += 1
 
-def Loop4(n):
+# def Loop4(n):
+#     i = n
+#     while i > 0:
+#         if i % 2 == 1:
+#             i = i - 1
+#         else:
+#             i = i / 2
+
+def Loop4a(n):
+    s = 0
     i = n
     while i > 0:
-        if i % 2 == 1:
-            i = i - 1
-        else:
-            i = i / 2
+        s += 1
+        i = (i - 1) / 2
 
 def Loop5(n):
     s = 1
@@ -35,5 +44,7 @@ def Loop5(n):
 
 def Loop6(n):
     i = 1
+    s = 1
     while i * i <= n:
         i = i + i
+        s = s + 1
