@@ -48,3 +48,17 @@ def Loop6(n):
     while i * i <= n:
         i = i + i
         s = s + 1
+
+def Loop1(n):
+    s = 0
+    for i in range(1, n + 1):
+        for j in range(1, n + 1):
+            s = s + 1
+
+def Loop2(n):
+    i = 1
+    while i <= n:
+        j = i
+        while j > 1:
+            j = j / 2
+        i = i + 1

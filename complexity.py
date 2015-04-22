@@ -66,8 +66,17 @@ class Scope(object):
             n: Dummy(n)
             for n in parameters
         }
+        self.steps = Dummy('steps')
         self._effects = {}
         self._output = None
+        self.add_effect(self.steps, sympy.S.Zero)
+        self.add_one_step()
+
+    def add_one_step(self):
+        s = self
+        while s is not None:
+            self.add_effect(s.steps, s.steps + 1)
+            s = s._parent
 
     @property
     def output(self):
@@ -159,9 +168,11 @@ class Visitor(VisitorBase):
     def visit_FunctionDef(self, node):
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
         self.visit(node.body)
-        print("Function %s:" % (node.name,))
         def BigO(e):
             return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo))
+        print("Function %s: O(%s)" %
+              (node.name,
+               BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
         if self.current_scope.output is not None:
             print("Result:\n%s" % (self.current_scope.output,))
         for n, e in self.current_scope._effects.items():
@@ -185,6 +196,7 @@ class Visitor(VisitorBase):
         name = target.id
         expr = self.visit(node.value)
         self.current_scope.add_effect(name, expr)
+        print("%s = %s" % (name, expr))
 
     def visit_BinOp(self, node):
         return self.binop(self.visit(node.left), node.op, self.visit(node.right))
@@ -228,6 +240,7 @@ class Visitor(VisitorBase):
         expr = self.visit(node.value)
         aug_expr = self.binop(self.current_scope[name], node.op, expr)
         self.current_scope.add_effect(name, aug_expr)
+        print("%s = %s" % (name, aug_expr))
 
     def visit_Num(self, node):
         return sympy.Rational(node.n)
@@ -249,7 +262,9 @@ class Visitor(VisitorBase):
             sc = self.current_scope
             self.push_scope(Scope(self.current_scope, [node.target.id]))
             itervar = self.current_scope[node.target.id]
+            print("FOR")
             self.visit(node.body)
+            print("ENDFOR")
             for n, e in self.current_scope._effects.items():
                 nsymb = self.current_scope[n]
                 if e.has(nsymb):
@@ -268,7 +283,9 @@ class Visitor(VisitorBase):
         test_vars = test.free_symbols
         sc = self.current_scope
         self.push_scope(Scope(self.current_scope, []))
+        print("WHILE")
         self.visit(node.body)
+        print("ENDWHILE")
         it_vars = test_vars & self.current_scope.changed_vars
         if not it_vars:
             raise ValueError("No iteration variables were changed: %s %s" %
@@ -283,10 +300,12 @@ class Visitor(VisitorBase):
         # print("Solve %s for %s" % (o, imax))
         iterations = sympy.solve(o, imax, dict=True)[0][imax]
         # print(iterations)
+        s = self.current_scope
         self.pop_scope()
         for n, e in effects.items():
             ee = e.subs(imax, iterations)
             self.current_scope.add_effect(n, ee)
+        print("%s iterations" % (self.current_scope.affect(s.steps),))
 
 
 def main():
