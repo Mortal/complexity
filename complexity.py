@@ -5,6 +5,10 @@ import argparse
 import sympy
 
 
+def Dummy(name):
+    return sympy.Dummy(name, integer=True, nonnegative=True)
+
+
 class VisitorBase(ast.NodeVisitor):
     def __init__(self, source):
         self._source_lines = source.split('\n')
@@ -59,7 +63,7 @@ class Scope(object):
     def __init__(self, parent, parameters):
         self._parent = parent
         self._locals = {
-            n: sympy.Dummy(n)
+            n: Dummy(n)
             for n in parameters
         }
         self._effects = {}
@@ -108,7 +112,7 @@ class Scope(object):
             try:
                 name = self[name]
             except KeyError:
-                self._locals[name] = sympy.Dummy(name)
+                self._locals[name] = Dummy(name)
                 name = self._locals[name]
         self._effects[name] = self.affect(expr)
 
@@ -133,14 +137,22 @@ def repeated(n, i, e, a, b):
             arg, = args
             if not (arg / n).simplify().has(n):
                 coeff = arg / n
-                return n + coeff ** (b - a + 1) * n
+                # print("Coefficient is %s, iterations is %s" %
+                #       (coeff, (b-a+1)))
+                return n * coeff ** (b - a + 1)
             raise NotImplementedError
         else:
             return e
 
 
 def termination_function(e):
-    return e.gts - e.lts
+    if isinstance(e, (sympy.LessThan, sympy.GreaterThan)):
+        c = 0
+    elif isinstance(e, (sympy.StrictLessThan, sympy.StrictGreaterThan)):
+        c = 1
+    else:
+        raise NotImplementedError(str(type(e)))
+    return e.gts - e.lts - c
 
 
 class Visitor(VisitorBase):
@@ -262,13 +274,15 @@ class Visitor(VisitorBase):
             raise ValueError("No iteration variables were changed: %s %s" %
                              (test_vars, self.current_scope.changed_vars))
         effects = {}
-        itervar = sympy.Dummy('itervar')
-        imax = sympy.Dummy('imax')
+        itervar = Dummy('itervar')
+        imax = Dummy('imax')
         for n, e in self.current_scope._effects.items():
             nsymb = self.current_scope[n]
             effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 0, imax))
         o = termination_function(test).subs(effects)
+        # print("Solve %s for %s" % (o, imax))
         iterations = sympy.solve(o, imax, dict=True)[0][imax]
+        # print(iterations)
         self.pop_scope()
         for n, e in effects.items():
             ee = e.subs(imax, iterations)
