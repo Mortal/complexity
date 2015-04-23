@@ -237,10 +237,14 @@ class Visitor(VisitorBase):
             return left / right
         elif op == ast.And:
             return sympy.And(left, right)
+        elif op == ast.Lt:
+            return sympy.StrictLessThan(left, right)
         elif op == ast.LtE:
             return sympy.LessThan(left, right)
         elif op == ast.Gt:
             return sympy.StrictGreaterThan(left, right)
+        elif op == ast.GtE:
+            return sympy.GreaterThan(left, right)
         else:
             raise TypeError("Unknown op %s" % (op,))
 

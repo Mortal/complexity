@@ -62,3 +62,9 @@ def Loop2(n):
         while j > 1:
             j = j / 2
         i = i + 1
+
+def nlogn(n):
+    for i in range(1, n + 1):
+        j = 1
+        while j < n:
+            j += j
