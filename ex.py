@@ -70,9 +70,9 @@ def logn(n):
 
 def logsq(n):
     i = 1
-    while i < n:
+    while i <= n:
         j = 1
-        while j < i:
+        while j <= i:
             j = 2 * j
         i = 2 * i
     # Should be O(log(n)**2)

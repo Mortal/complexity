@@ -87,14 +87,13 @@ class VisitorBase(ast.NodeVisitor):
         if i not in self.log_lines:
             print(line)
             return
-        length = len(line)
+        length = max(len(line), 38)
         for j, c in enumerate(self.log_lines[i]):
             if j == 0:
-                l = line + '  '
+                l = line
             else:
-                l = ' ' * (length + 2)
-            l += '# %s' % (c,)
-            print(l)
+                l = ''
+            print('%s# %s' % (l.ljust(length), c))
         del self.log_lines[i]
 
 
@@ -319,9 +318,12 @@ class Visitor(VisitorBase):
             # print("FOR")
             self.visit(node.body)
             # print("ENDFOR")
+            its = None
             for n, e in self.current_scope._effects.items():
                 nsymb = self.current_scope[n]
                 ee = repeated(nsymb, itervar, e, a, b - 1)
+                if n == sc.steps:
+                    its = ee - sc.steps
                 sc.add_effect(n, ee)
                 # if e.has(nsymb):
                 #     ee = repeated(nsymb, itervar, e, a, b - 1)
@@ -331,6 +333,7 @@ class Visitor(VisitorBase):
                 # else:
                 #     sc.add_effect(n, e)
             self.pop_scope()
+            self.log("%s iterations" % (its,))
         else:
             raise ValueError("Cannot handle non-range for")
 
@@ -354,18 +357,17 @@ class Visitor(VisitorBase):
             effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 1, imax))
         o = termination_function(test).subs(effects)
         iterations = sympy.solve(o, imax, dict=True)[0][imax]
-        self.log("Solve %s for %s => %s" % (o, imax, iterations))
+        # self.log("Solve %s for %s => %s" % (o, imax, iterations))
         # iterations = iterations * 2
-        self.log(iterations.simplify())
+        # self.log(iterations.simplify())
         s = self.current_scope
         self.pop_scope()
         its = None
         for n, e in effects.items():
             ee = e.subs(imax, iterations)
-            if n == s.steps:
+            if n == self.current_scope.steps:
                 its = ee
-            else:
-                self.current_scope.add_effect(n, ee)
+            self.current_scope.add_effect(n, ee)
         self.log("%s iterations" % (its,))
 
 
