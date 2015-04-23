@@ -1,6 +1,7 @@
 import ast
 import sys
 import argparse
+import collections
 
 import sympy
 
@@ -26,6 +27,8 @@ class VisitorBase(ast.NodeVisitor):
         self.scope_stack = []
         self.current_scope = None
         self.unhandled = set()
+        self.log_lines = collections.defaultdict(list)
+        self.current_line = [None]
 
     def push_scope(self, s):
         self.scope_stack.append(self.current_scope)
@@ -40,10 +43,20 @@ class VisitorBase(ast.NodeVisitor):
                 self.visit(x)
             return
         try:
+            current_line = node.lineno - 1
+        except AttributeError:
+            current_line = None
+        self.current_line.append(current_line)
+        try:
             return super(VisitorBase, self).visit(node)
         except:
             self.source_backtrace(node, sys.stderr)
             raise
+        finally:
+            self.current_line.pop()
+
+    def log(self, s):
+        self.log_lines[self.current_line[-1]].append(s)
 
     def source_backtrace(self, node, file):
         try:
@@ -68,6 +81,21 @@ class VisitorBase(ast.NodeVisitor):
 
     def visit_Module(self, node):
         self.visit_children(node)
+
+    def print_line(self, i):
+        line = self._source_lines[i]
+        if i not in self.log_lines:
+            print(line)
+            return
+        length = len(line)
+        for j, c in enumerate(self.log_lines[i]):
+            if j == 0:
+                l = line + '  '
+            else:
+                l = ' ' * (length + 2)
+            l += '# %s' % (c,)
+            print(l)
+        del self.log_lines[i]
 
 
 class Scope(object):
@@ -181,8 +209,9 @@ class Visitor(VisitorBase):
         linenos[0] = 0
         linenos.append(len(self._source_lines))
         for v, i, j in zip(node.body, linenos[:-1], linenos[1:]):
-            print('\n'.join(self._source_lines[i:j]))
             self.visit(v)
+            for k in range(i, j):
+                self.print_line(k)
 
     def visit_FunctionDef(self, node):
         # print((' Function %s (line %s) ' % (node.name, node.lineno))
@@ -191,9 +220,9 @@ class Visitor(VisitorBase):
         self.visit(node.body)
         def BigO(e):
             return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo))
-        print("Function %s: O(%s)" %
-              (node.name,
-               BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
+        self.log("Function %s: O(%s)" %
+                 (node.name,
+                  BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
         if self.current_scope.output is not None:
             print("Result: %s" % (self.current_scope.affect(self.current_scope.output),))
         # for n, e in self.current_scope._effects.items():
@@ -210,14 +239,14 @@ class Visitor(VisitorBase):
         print('')
 
     def visit_Return(self, node):
-        self.current_scope.output = self.visit(node.value)
+        self.log("Result: %s" % (self.current_scope.affect(self.visit(node.value)),))
 
     def visit_Assign(self, node):
         target, = node.targets
         name = target.id
         expr = self.visit(node.value)
         self.current_scope.add_effect(name, expr)
-        # print("%s = %s" % (name, expr))
+        self.log("%s = %s" % (name, expr))
 
     def visit_BinOp(self, node):
         return self.binop(self.visit(node.left), node.op, self.visit(node.right))
@@ -265,7 +294,7 @@ class Visitor(VisitorBase):
         expr = self.visit(node.value)
         aug_expr = self.binop(self.current_scope[name], node.op, expr)
         self.current_scope.add_effect(name, aug_expr)
-        # print("%s = %s" % (name, aug_expr))
+        self.log("%s = %s" % (name, aug_expr))
 
     def visit_Num(self, node):
         return sympy.Rational(node.n)
@@ -325,9 +354,9 @@ class Visitor(VisitorBase):
             effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 1, imax))
         o = termination_function(test).subs(effects)
         iterations = sympy.solve(o, imax, dict=True)[0][imax]
-        # print("Solve %s for %s => %s" % (o, imax, iterations))
+        self.log("Solve %s for %s => %s" % (o, imax, iterations))
         # iterations = iterations * 2
-        # print(iterations.simplify())
+        self.log(iterations.simplify())
         s = self.current_scope
         self.pop_scope()
         its = None
@@ -337,7 +366,7 @@ class Visitor(VisitorBase):
                 its = ee
             else:
                 self.current_scope.add_effect(n, ee)
-        # print("%s iterations" % (its,))
+        self.log("%s iterations" % (its,))
 
 
 def main():
