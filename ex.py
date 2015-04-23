@@ -67,3 +67,12 @@ def logn(n):
     j = 1
     while j < n:
         j += j
+
+def logsq(n):
+    i = 1
+    while i < n:
+        j = 1
+        while j < i:
+            j = 2 * j
+        i = 2 * i
+    # Should be O(log(n)**2)
