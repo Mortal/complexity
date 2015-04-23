@@ -165,9 +165,17 @@ def termination_function(e):
 
 
 class Visitor(VisitorBase):
+    def visit_Module(self, node):
+        linenos = [v.lineno - 1 for v in node.body]
+        linenos[0] = 0
+        linenos.append(len(self._source_lines))
+        for v, i, j in zip(node.body, linenos[:-1], linenos[1:]):
+            print('\n'.join(self._source_lines[i:j]))
+            self.visit(v)
+
     def visit_FunctionDef(self, node):
-        print((' Function %s (line %s) ' % (node.name, node.lineno))
-              .center(79, '='))
+        # print((' Function %s (line %s) ' % (node.name, node.lineno))
+        #       .center(79, '='))
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
         self.visit(node.body)
         def BigO(e):
@@ -177,12 +185,12 @@ class Visitor(VisitorBase):
                BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
         if self.current_scope.output is not None:
             print("Result:\n%s" % (self.current_scope.output,))
-        for n, e in self.current_scope._effects.items():
-            ee = BigO(e)
-            if ee.args:
-                print("%s:\n%s = O(%s)" % (n, e, ee.args[0]))
-            else:
-                print("%s:\n%s = O(??)" % (n, e))
+        # for n, e in self.current_scope._effects.items():
+        #     ee = BigO(e)
+        #     if ee.args:
+        #         print("%s:\n%s = O(%s)" % (n, e, ee.args[0]))
+        #     else:
+        #         print("%s:\n%s = O(??)" % (n, e))
         self.pop_scope()
         if self.unhandled:
             print("Unhandled types: %s" %
@@ -198,7 +206,7 @@ class Visitor(VisitorBase):
         name = target.id
         expr = self.visit(node.value)
         self.current_scope.add_effect(name, expr)
-        print("%s = %s" % (name, expr))
+        # print("%s = %s" % (name, expr))
 
     def visit_BinOp(self, node):
         return self.binop(self.visit(node.left), node.op, self.visit(node.right))
@@ -242,7 +250,7 @@ class Visitor(VisitorBase):
         expr = self.visit(node.value)
         aug_expr = self.binop(self.current_scope[name], node.op, expr)
         self.current_scope.add_effect(name, aug_expr)
-        print("%s = %s" % (name, aug_expr))
+        # print("%s = %s" % (name, aug_expr))
 
     def visit_Num(self, node):
         return sympy.Rational(node.n)
@@ -264,9 +272,9 @@ class Visitor(VisitorBase):
             sc = self.current_scope
             self.push_scope(Scope(self.current_scope, [node.target.id]))
             itervar = self.current_scope[node.target.id]
-            print("FOR")
+            # print("FOR")
             self.visit(node.body)
-            print("ENDFOR")
+            # print("ENDFOR")
             for n, e in self.current_scope._effects.items():
                 nsymb = self.current_scope[n]
                 ee = repeated(nsymb, itervar, e, a, b - 1)
@@ -287,9 +295,9 @@ class Visitor(VisitorBase):
         test_vars = test.free_symbols
         sc = self.current_scope
         self.push_scope(Scope(self.current_scope, []))
-        print("WHILE")
+        # print("WHILE")
         self.visit(node.body)
-        print("ENDWHILE")
+        # print("ENDWHILE")
         it_vars = test_vars & self.current_scope.changed_vars
         if not it_vars:
             raise ValueError("No iteration variables were changed: %s %s" %
@@ -313,7 +321,7 @@ class Visitor(VisitorBase):
                 its = ee
             else:
                 self.current_scope.add_effect(n, ee)
-        print("%s iterations" % (its,))
+        # print("%s iterations" % (its,))
 
 
 def main():
