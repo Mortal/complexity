@@ -65,5 +65,5 @@ def nlogn(n):
 
 def logn(n):
     j = 1
-    while j < 2*n:
+    while j < n:
         j += j

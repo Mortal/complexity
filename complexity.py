@@ -4,6 +4,17 @@ import argparse
 
 import sympy
 
+from sympy import Basic
+from sympy.printing.str import StrPrinter
+
+
+class CustomStrPrinter(StrPrinter):
+    def _print_Dummy(self, expr):
+        return expr.name
+
+
+Basic.__str__ = lambda self: CustomStrPrinter().doprint(self)
+
 
 def Dummy(name):
     return sympy.Dummy(name, integer=True, nonnegative=True)
@@ -311,11 +322,12 @@ class Visitor(VisitorBase):
         imax = Dummy('imax')
         for n, e in self.current_scope._effects.items():
             nsymb = self.current_scope[n]
-            effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 0, imax))
+            effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 1, imax))
         o = termination_function(test).subs(effects)
-        # print("Solve %s for %s" % (o, imax))
         iterations = sympy.solve(o, imax, dict=True)[0][imax]
-        # print(iterations)
+        # print("Solve %s for %s => %s" % (o, imax, iterations))
+        # iterations = iterations * 2
+        # print(iterations.simplify())
         s = self.current_scope
         self.pop_scope()
         its = None
