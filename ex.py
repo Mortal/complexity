@@ -3,35 +3,26 @@ def Loop1(n):
     for i in range(1, n + 1):
         for j in range(1, i * i + 1):
             s = s + 1
+    return s
 
 def Loop2(n):
     s = 0
-    for i in range(n + 1):
-        for j in range(n + 1):
+    for i in range(1, n + 1):
+        for j in range(1, i + 1):
             s = s + 1
+    return s
 
 def Loop3(n):
     i = 0
     j = n
-    s = 0
     while i <= j:
         i = i + 1
         j = j - 1
-        s += 1
-
-# def Loop4(n):
-#     i = n
-#     while i > 0:
-#         if i % 2 == 1:
-#             i = i - 1
-#         else:
-#             i = i / 2
+    return i
 
 def Loop4a(n):
-    s = 0
     i = n
     while i > 0:
-        s += 1
         i = (i - 1) / 2
 
 def Loop5(n):
@@ -41,6 +32,7 @@ def Loop5(n):
         for j in range(1, i + 1):
             s = s + 1
         i = i * 2
+    return s
 
 def Loop6(n):
     i = 1
@@ -48,12 +40,14 @@ def Loop6(n):
     while i * i <= n:
         i = i + i
         s = s + 1
+    return s
 
 def Loop1(n):
     s = 0
     for i in range(1, n + 1):
         for j in range(1, n + 1):
             s = s + 1
+    return s
 
 def Loop2(n):
     i = 1
@@ -64,7 +58,12 @@ def Loop2(n):
         i = i + 1
 
 def nlogn(n):
-    for i in range(1, n + 1):
+    for i in range(n):
         j = 1
         while j < n:
             j += j
+
+def logn(n):
+    j = 1
+    while j < 2*n:
+        j += j

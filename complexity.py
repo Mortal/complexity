@@ -184,7 +184,7 @@ class Visitor(VisitorBase):
               (node.name,
                BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
         if self.current_scope.output is not None:
-            print("Result:\n%s" % (self.current_scope.output,))
+            print("Result: %s" % (self.current_scope.affect(self.current_scope.output),))
         # for n, e in self.current_scope._effects.items():
         #     ee = BigO(e)
         #     if ee.args:
