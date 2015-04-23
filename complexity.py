@@ -136,7 +136,7 @@ def repeated(n, i, e, a, b):
                 return n + sympy.summation(term, (i, a, b))
             raise NotImplementedError("has i and n")
         else:
-            raise NotImplementedError("has i but not n")
+            return e.subs(i, b)
     else:
         if e.has(n):
             if not (e - n).has(n):
@@ -166,6 +166,8 @@ def termination_function(e):
 
 class Visitor(VisitorBase):
     def visit_FunctionDef(self, node):
+        print((' Function %s (line %s) ' % (node.name, node.lineno))
+              .center(79, '='))
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
         self.visit(node.body)
         def BigO(e):
@@ -267,13 +269,15 @@ class Visitor(VisitorBase):
             print("ENDFOR")
             for n, e in self.current_scope._effects.items():
                 nsymb = self.current_scope[n]
-                if e.has(nsymb):
-                    ee = repeated(nsymb, itervar, e, a, b - 1)
-                    sc.add_effect(n, ee)
-                elif e.has(itervar):
-                    sc.add_effect(n, e.subs(itervar, b - 1))
-                else:
-                    sc.add_effect(n, e)
+                ee = repeated(nsymb, itervar, e, a, b - 1)
+                sc.add_effect(n, ee)
+                # if e.has(nsymb):
+                #     ee = repeated(nsymb, itervar, e, a, b - 1)
+                #     sc.add_effect(n, ee)
+                # elif e.has(itervar):
+                #     sc.add_effect(n, e.subs(itervar, b - 1))
+                # else:
+                #     sc.add_effect(n, e)
             self.pop_scope()
         else:
             raise ValueError("Cannot handle non-range for")
@@ -302,10 +306,14 @@ class Visitor(VisitorBase):
         # print(iterations)
         s = self.current_scope
         self.pop_scope()
+        its = None
         for n, e in effects.items():
             ee = e.subs(imax, iterations)
-            self.current_scope.add_effect(n, ee)
-        print("%s iterations" % (self.current_scope.affect(s.steps),))
+            if n == s.steps:
+                its = ee
+            else:
+                self.current_scope.add_effect(n, ee)
+        print("%s iterations" % (its,))
 
 
 def main():
