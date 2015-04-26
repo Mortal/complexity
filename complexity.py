@@ -361,14 +361,12 @@ class Visitor(VisitorBase):
 
         # Compute number of iterations
         iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
-        effects = {}
-        for n, e in effects_after_k.items():
-            ee = e.subs(k, iterations)
-            self.log("%s_next = %s" % (n, inner_scope._effects[n]))
-            self.log("%s_k = %s" % (n, e))
-            self.log("%s' = %s" % (n, outer_scope.affect(ee)))
-            effects[n] = ee
+        effects = {
+            n: e.subs(k, iterations)
+            for n, e in effects_after_k.items()
+        }
         for n, e in effects.items():
+            # self.log('%s = %s' % (n, outer_scope.affect(e)))
             outer_scope.add_effect(n, e)
         t1 = outer_scope.affect(self.steps)
         self.log("%s iterations, %s steps" % (iterations, t1 - t0))
