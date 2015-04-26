@@ -302,40 +302,40 @@ class Visitor(VisitorBase):
         return self.current_scope[node.id]
 
     def visit_For(self, node):
-        assert isinstance(node.iter, ast.Call)
-        if node.iter.func.id == 'range':
-            args = node.iter.args
-            if len(args) == 1:
-                a = 0
-                b = self.visit(args[0])
-            elif len(args) == 2:
-                a, b = self.visit(args[0]), self.visit(args[1])
-            else:
-                raise ValueError("Cannot handle 3-arg range")
-            sc = self.current_scope
-            self.push_scope(Scope(self.current_scope, [node.target.id]))
-            itervar = self.current_scope[node.target.id]
-            # print("FOR")
-            self.visit(node.body)
-            # print("ENDFOR")
-            its = None
-            for n, e in self.current_scope._effects.items():
-                nsymb = self.current_scope[n]
-                ee = repeated(nsymb, itervar, e, a, b - 1)
-                if n == sc.steps:
-                    its = ee - sc.steps
-                sc.add_effect(n, ee)
-                # if e.has(nsymb):
-                #     ee = repeated(nsymb, itervar, e, a, b - 1)
-                #     sc.add_effect(n, ee)
-                # elif e.has(itervar):
-                #     sc.add_effect(n, e.subs(itervar, b - 1))
-                # else:
-                #     sc.add_effect(n, e)
-            self.pop_scope()
-            self.log("%s iterations" % (its,))
+        if not isinstance(node.iter, ast.Call):
+            raise NotImplementedError('for of non-Call')
+        if node.iter.func.id != 'range':
+            raise NotImplementedError('for of non-range')
+        args = node.iter.args
+        if len(args) == 1:
+            a = 0
+            b = self.visit(args[0])
+        elif len(args) == 2:
+            a, b = self.visit(args[0]), self.visit(args[1])
         else:
-            raise ValueError("Cannot handle non-range for")
+            raise NotImplementedError('3-arg range')
+        sc = self.current_scope
+        self.push_scope(Scope(self.current_scope, [node.target.id]))
+        itervar = self.current_scope[node.target.id]
+        # print("FOR")
+        self.visit(node.body)
+        # print("ENDFOR")
+        its = None
+        for n, e in self.current_scope._effects.items():
+            nsymb = self.current_scope[n]
+            ee = repeated(nsymb, itervar, e, a, b - 1)
+            if n == sc.steps:
+                its = ee - sc.steps
+            sc.add_effect(n, ee)
+            # if e.has(nsymb):
+            #     ee = repeated(nsymb, itervar, e, a, b - 1)
+            #     sc.add_effect(n, ee)
+            # elif e.has(itervar):
+            #     sc.add_effect(n, e.subs(itervar, b - 1))
+            # else:
+            #     sc.add_effect(n, e)
+        self.pop_scope()
+        self.log("%s iterations" % (its,))
 
     def visit_While(self, node):
         test = self.visit(node.test)
