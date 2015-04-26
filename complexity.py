@@ -101,7 +101,6 @@ class VisitorBase(ast.NodeVisitor):
 class Scope(object):
     def __init__(self, parent, parameters):
         self._parent = parent
-        self._depth = 0 if parent is None else 1 + parent._depth
         self._locals = {
             n: Dummy(n)
             for n in parameters
