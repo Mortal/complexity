@@ -326,6 +326,7 @@ class Visitor(VisitorBase):
         iterations = outer_scope.affect(b - a)
         for nsymb, e in inner_scope._effects.items():
             ee = repeated(nsymb, itervar, e, a, b - 1)
+            self.log("%s = %s = %s" % (nsymb, e, ee))
             ee = outer_scope.affect(ee)
             outer_scope.add_effect(nsymb, ee)
         steps = outer_scope.affect(inner_scope.steps)
@@ -352,7 +353,7 @@ class Visitor(VisitorBase):
         iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
         for n, e in effects.items():
             ee = outer_scope.affect(e.subs(k, iterations))
-            # self.log("%s = %s = %s" % (n, outer_scope.affect(e), ee))
+            self.log("%s = %s = %s = %s" % (n, e, e.subs(k, iterations), ee))
             outer_scope.add_effect(n, ee)
         steps = outer_scope.affect(inner_scope.steps)
         self.log("%s iterations, %s steps" % (iterations, steps))
