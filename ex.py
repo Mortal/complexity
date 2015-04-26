@@ -76,3 +76,11 @@ def logsq(n):
             j = 2 * j
         i = 2 * i
     # Should be O(log(n)**2)
+
+def whilewhile(n):
+    i = 1
+    while i <= n:
+        j = 1
+        while j <= n:
+            j = j + 1
+        i = i + 1

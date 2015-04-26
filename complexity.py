@@ -101,21 +101,25 @@ class VisitorBase(ast.NodeVisitor):
 class Scope(object):
     def __init__(self, parent, parameters):
         self._parent = parent
+        self._depth = 0 if parent is None else 1 + parent._depth
         self._locals = {
             n: Dummy(n)
             for n in parameters
         }
-        self.steps = Dummy('steps')
         self._effects = {}
         self._output = None
-        self.add_effect(self.steps, sympy.S.Zero)
-        self.add_one_step()
+        self.steps = Dummy('steps' + str(self._depth))
+        self.add_effect(self.steps, self.steps + sympy.S.One)
+        # self.add_one_step()
 
-    def add_one_step(self):
-        s = self
-        while s is not None:
-            self.add_effect(s.steps, s.steps + 1)
-            s = s._parent
+    def add_steps(self, e):
+        self.add_effect(self.steps, self.steps + e)
+
+    # def add_one_step(self):
+    #     s = self
+    #     while s is not None:
+    #         self.add_effect(s.steps, s.steps + 1)
+    #         s = s._parent
 
     @property
     def output(self):
@@ -335,36 +339,30 @@ class Visitor(VisitorBase):
 
     def visit_While(self, node):
         test = self.visit(node.test)
-        test_vars = test.free_symbols
-        sc = self.current_scope
-        self.push_scope(Scope(self.current_scope, []))
-        # print("WHILE")
+        outer_scope = self.current_scope
+        inner_scope = Scope(outer_scope, [])
+        outer_scope.add_effect(inner_scope.steps, sympy.S.Zero)
+        self.push_scope(inner_scope)
         self.visit(node.body)
-        # print("ENDWHILE")
-        it_vars = test_vars & self.current_scope.changed_vars
-        if not it_vars:
-            raise ValueError("No iteration variables were changed: %s %s" %
-                             (test_vars, self.current_scope.changed_vars))
-        effects = {}
-        itervar = Dummy('itervar')
-        imax = Dummy('imax')
-        for n, e in self.current_scope._effects.items():
-            nsymb = self.current_scope[n]
-            effects[nsymb] = sc.affect(repeated(nsymb, itervar, e, 1, imax))
-        o = termination_function(test).subs(effects)
-        iterations = sympy.solve(o, imax, dict=True)[0][imax]
-        # self.log("Solve %s for %s => %s" % (o, imax, iterations))
-        # iterations = iterations * 2
-        # self.log(iterations.simplify())
-        s = self.current_scope
         self.pop_scope()
-        its = None
+
+        # Compute effects of loop after `k` iterations
+        effects = {}
+        k = Dummy('k')
+        for nsymb, e in inner_scope._effects.items():
+            effects[nsymb] = repeated(nsymb, Dummy('i'), e, 1, k)
+        o = termination_function(test).subs(effects)
+
+        # Compute number of iterations
+        iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
+        self.log("%s iterations" % (iterations,))
         for n, e in effects.items():
-            ee = e.subs(imax, iterations)
-            if n == self.current_scope.steps:
-                its = ee
-            self.current_scope.add_effect(n, ee)
-        self.log("%s iterations" % (its,))
+            ee = outer_scope.affect(e.subs(k, iterations))
+            self.log("%s = %s = %s" % (n, outer_scope.affect(e), ee))
+            outer_scope.add_effect(n, ee)
+        steps = outer_scope.affect(inner_scope.steps)
+        self.log("%s steps" % (steps,))
+        outer_scope.add_steps(steps)
 
 
 def main():
