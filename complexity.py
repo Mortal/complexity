@@ -314,28 +314,23 @@ class Visitor(VisitorBase):
             a, b = self.visit(args[0]), self.visit(args[1])
         else:
             raise NotImplementedError('3-arg range')
-        sc = self.current_scope
-        self.push_scope(Scope(self.current_scope, [node.target.id]))
-        itervar = self.current_scope[node.target.id]
-        # print("FOR")
+
+        outer_scope = self.current_scope
+        inner_scope = Scope(outer_scope, [node.target.id])
+        outer_scope.add_effect(inner_scope.steps, sympy.S.Zero)
+        itervar = inner_scope[node.target.id]
+        self.push_scope(inner_scope)
         self.visit(node.body)
-        # print("ENDFOR")
-        its = None
-        for n, e in self.current_scope._effects.items():
-            nsymb = self.current_scope[n]
-            ee = repeated(nsymb, itervar, e, a, b - 1)
-            if n == sc.steps:
-                its = ee - sc.steps
-            sc.add_effect(n, ee)
-            # if e.has(nsymb):
-            #     ee = repeated(nsymb, itervar, e, a, b - 1)
-            #     sc.add_effect(n, ee)
-            # elif e.has(itervar):
-            #     sc.add_effect(n, e.subs(itervar, b - 1))
-            # else:
-            #     sc.add_effect(n, e)
         self.pop_scope()
-        self.log("%s iterations" % (its,))
+
+        iterations = outer_scope.affect(b - a)
+        for nsymb, e in inner_scope._effects.items():
+            ee = repeated(nsymb, itervar, e, a, b - 1)
+            ee = outer_scope.affect(ee)
+            outer_scope.add_effect(nsymb, ee)
+        steps = outer_scope.affect(inner_scope.steps)
+        self.log("%s iterations, %s steps" % (iterations, steps))
+        outer_scope.add_steps(steps)
 
     def visit_While(self, node):
         test = self.visit(node.test)
@@ -355,13 +350,12 @@ class Visitor(VisitorBase):
 
         # Compute number of iterations
         iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
-        self.log("%s iterations" % (iterations,))
         for n, e in effects.items():
             ee = outer_scope.affect(e.subs(k, iterations))
-            self.log("%s = %s = %s" % (n, outer_scope.affect(e), ee))
+            # self.log("%s = %s = %s" % (n, outer_scope.affect(e), ee))
             outer_scope.add_effect(n, ee)
         steps = outer_scope.affect(inner_scope.steps)
-        self.log("%s steps" % (steps,))
+        self.log("%s iterations, %s steps" % (iterations, steps))
         outer_scope.add_steps(steps)
 
 
