@@ -108,18 +108,6 @@ class Scope(object):
         }
         self._effects = {}
         self._output = None
-        self.steps = Dummy('steps' + str(self._depth))
-        self.add_effect(self.steps, self.steps + sympy.S.One)
-        # self.add_one_step()
-
-    def add_steps(self, e):
-        self.add_effect(self.steps, self.steps + e)
-
-    # def add_one_step(self):
-    #     s = self
-    #     while s is not None:
-    #         self.add_effect(s.steps, s.steps + 1)
-    #         s = s._parent
 
     @property
     def output(self):
@@ -221,12 +209,14 @@ class Visitor(VisitorBase):
         # print((' Function %s (line %s) ' % (node.name, node.lineno))
         #       .center(79, '='))
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
+        self.steps = Dummy('steps')
+        self.current_scope.add_effect(self.steps, sympy.S.One)
         self.visit(node.body)
         def BigO(e):
             return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo))
         self.log("Function %s: O(%s)" %
                  (node.name,
-                  BigO(self.current_scope.affect(self.current_scope.steps),).args[0]))
+                  BigO(self.current_scope.affect(self.steps),).args[0]))
         if self.current_scope.output is not None:
             print("Result: %s" % (self.current_scope.affect(self.current_scope.output),))
         # for n, e in self.current_scope._effects.items():
@@ -317,9 +307,9 @@ class Visitor(VisitorBase):
 
         outer_scope = self.current_scope
         inner_scope = Scope(outer_scope, [node.target.id])
-        outer_scope.add_effect(inner_scope.steps, sympy.S.Zero)
         itervar = inner_scope[node.target.id]
         self.push_scope(inner_scope)
+        inner_scope.add_effect(self.steps, self.steps + sympy.S.One)
         self.visit(node.body)
         self.pop_scope()
 
@@ -329,16 +319,14 @@ class Visitor(VisitorBase):
             self.log("%s = %s = %s" % (nsymb, e, ee))
             ee = outer_scope.affect(ee)
             outer_scope.add_effect(nsymb, ee)
-        steps = outer_scope.affect(inner_scope.steps)
-        self.log("%s iterations, %s steps" % (iterations, steps))
-        outer_scope.add_steps(steps)
+        self.log("%s iterations" % (iterations,))
 
     def visit_While(self, node):
         test = self.visit(node.test)
         outer_scope = self.current_scope
         inner_scope = Scope(outer_scope, [])
-        outer_scope.add_effect(inner_scope.steps, sympy.S.Zero)
         self.push_scope(inner_scope)
+        inner_scope.add_effect(self.steps, self.steps + sympy.S.One)
         self.visit(node.body)
         self.pop_scope()
 
@@ -355,9 +343,7 @@ class Visitor(VisitorBase):
             ee = outer_scope.affect(e.subs(k, iterations))
             self.log("%s = %s = %s = %s" % (n, e, e.subs(k, iterations), ee))
             outer_scope.add_effect(n, ee)
-        steps = outer_scope.affect(inner_scope.steps)
-        self.log("%s iterations, %s steps" % (iterations, steps))
-        outer_scope.add_steps(steps)
+        self.log("%s iterations" % (iterations,))
 
 
 def main():

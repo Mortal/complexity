@@ -70,11 +70,14 @@ def logn(n):
 
 def logsq(n):
     i = 1
+    s = 0
     while i <= n:
         j = 1
         while j <= i:
             j = 2 * j
+            s += 1
         i = 2 * i
+    return s
     # Should be O(log(n)**2)
 
 def whilewhile(n):
