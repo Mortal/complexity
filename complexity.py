@@ -315,7 +315,7 @@ class Visitor(VisitorBase):
 
         iterations = outer_scope.affect(b - a)
         effects = {}
-        for n, e in topological_order(inner_scope._effects):
+        for n, e in self.topological_order(inner_scope._effects):
             ee = repeated(n, k, e.subs(effects), a, b - 1)
             self.log("%s = %s" % (n, outer_scope.affect(ee)))
             effects[n] = ee
@@ -337,8 +337,11 @@ class Visitor(VisitorBase):
         # Compute effects of loop after `k` iterations
         k = Dummy('k')
         effects_after_k = {}
-        for n, e in topological_order(inner_scope._effects):
-            effects_after_k[n] = repeated(n, Dummy('i'), e.subs(effects_after_k), 1, k)
+        for n, e in self.topological_order(inner_scope._effects):
+            ee = e.subs(effects_after_k)
+            effects_after_k[n] = repeated(n, Dummy('i'), ee, 1, k)
+            self.log("%s = %s = %s" % (n, ee, effects_after_k[n]))
+        print(effects_after_k)
 
         o = termination_function(test).subs(effects_after_k)
 
@@ -349,11 +352,12 @@ class Visitor(VisitorBase):
             for n, e in effects_after_k.items()
         }
         for n, e in effects.items():
-            # self.log('%s = %s' % (n, outer_scope.affect(e)))
+            self.log('%s = %s' % (n, outer_scope.affect(e)))
             outer_scope.add_effect(n, e)
         t1 = outer_scope.affect(self.steps)
         self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 
+    @staticmethod
     def topological_order(effects):
         dependers = {n: [] for n, e in effects.items()}
         depcount = {}
