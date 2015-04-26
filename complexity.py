@@ -348,7 +348,10 @@ class Visitor(VisitorBase):
                     c += 1
             depcount[n] = c
         while depcount:
-            n = next(n for n, d in depcount.items() if d == 0)
+            try:
+                n = next(n for n, d in depcount.items() if d == 0)
+            except StopIteration:
+                raise NotImplementedError('Recursive dependency')
             del depcount[n]
             e = effects[n]
             effects_after_k[n] = repeated(n, Dummy('i'), e.subs(effects_after_k), 1, k)
