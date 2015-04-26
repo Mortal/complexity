@@ -297,7 +297,7 @@ class Visitor(VisitorBase):
             raise NotImplementedError('for of non-range')
         args = node.iter.args
         if len(args) == 1:
-            a = 0
+            a = sympy.S.Zero
             b = self.visit(args[0])
         elif len(args) == 2:
             a, b = self.visit(args[0]), self.visit(args[1])
@@ -305,9 +305,9 @@ class Visitor(VisitorBase):
             raise NotImplementedError('3-arg range')
 
         outer_scope = self.current_scope
-        t0 = outer_scope.affect(self.steps)
         inner_scope = Scope(outer_scope, [node.target.id])
-        itervar = inner_scope[node.target.id]
+        t0 = outer_scope.affect(self.steps)
+        k = inner_scope[node.target.id]
         self.push_scope(inner_scope)
         inner_scope.add_effect(self.steps, self.steps + sympy.S.One)
         self.visit(node.body)
@@ -315,12 +315,12 @@ class Visitor(VisitorBase):
 
         iterations = outer_scope.affect(b - a)
         effects = {}
-        for nsymb, e in inner_scope._effects.items():
-            ee = repeated(nsymb, itervar, e, a, b - 1)
-            self.log("%s = %s = %s = %s" % (nsymb, e, ee, outer_scope.affect(ee)))
-            effects[nsymb] = ee
-        for nsymb, e in effects.items():
-            outer_scope.add_effect(nsymb, e)
+        for n, e in topological_order(inner_scope._effects):
+            ee = repeated(n, k, e.subs(effects), a, b - 1)
+            self.log("%s = %s" % (n, outer_scope.affect(ee)))
+            effects[n] = ee
+        for n, e in effects.items():
+            outer_scope.add_effect(n, e)
         t1 = outer_scope.affect(self.steps)
         self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 
@@ -335,9 +335,26 @@ class Visitor(VisitorBase):
         self.pop_scope()
 
         # Compute effects of loop after `k` iterations
-        effects = {n: e for n, e in inner_scope._effects.items()}
-        effects_after_k = {}
         k = Dummy('k')
+        effects_after_k = {}
+        for n, e in topological_order(inner_scope._effects):
+            effects_after_k[n] = repeated(n, Dummy('i'), e.subs(effects_after_k), 1, k)
+
+        o = termination_function(test).subs(effects_after_k)
+
+        # Compute number of iterations
+        iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
+        effects = {
+            n: e.subs(k, iterations)
+            for n, e in effects_after_k.items()
+        }
+        for n, e in effects.items():
+            # self.log('%s = %s' % (n, outer_scope.affect(e)))
+            outer_scope.add_effect(n, e)
+        t1 = outer_scope.affect(self.steps)
+        self.log("%s iterations, %s steps" % (iterations, t1 - t0))
+
+    def topological_order(effects):
         dependers = {n: [] for n, e in effects.items()}
         depcount = {}
         for n, e in effects.items():
@@ -353,23 +370,9 @@ class Visitor(VisitorBase):
             except StopIteration:
                 raise NotImplementedError('Recursive dependency')
             del depcount[n]
-            e = effects[n]
-            effects_after_k[n] = repeated(n, Dummy('i'), e.subs(effects_after_k), 1, k)
+            yield (n, effects[n])
             for dep in dependers[n]:
                 depcount[dep] -= 1
-        o = termination_function(test).subs(effects_after_k)
-
-        # Compute number of iterations
-        iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
-        effects = {
-            n: e.subs(k, iterations)
-            for n, e in effects_after_k.items()
-        }
-        for n, e in effects.items():
-            # self.log('%s = %s' % (n, outer_scope.affect(e)))
-            outer_scope.add_effect(n, e)
-        t1 = outer_scope.affect(self.steps)
-        self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 
 
 def main():
