@@ -305,6 +305,7 @@ class Visitor(VisitorBase):
             raise NotImplementedError('3-arg range')
 
         outer_scope = self.current_scope
+        t0 = outer_scope.affect(self.steps)
         inner_scope = Scope(outer_scope, [node.target.id])
         itervar = inner_scope[node.target.id]
         self.push_scope(inner_scope)
@@ -313,36 +314,61 @@ class Visitor(VisitorBase):
         self.pop_scope()
 
         iterations = outer_scope.affect(b - a)
+        effects = {}
         for nsymb, e in inner_scope._effects.items():
             ee = repeated(nsymb, itervar, e, a, b - 1)
-            self.log("%s = %s = %s" % (nsymb, e, ee))
-            ee = outer_scope.affect(ee)
-            outer_scope.add_effect(nsymb, ee)
-        self.log("%s iterations" % (iterations,))
+            self.log("%s = %s = %s = %s" % (nsymb, e, ee, outer_scope.affect(ee)))
+            effects[nsymb] = ee
+        for nsymb, e in effects.items():
+            outer_scope.add_effect(nsymb, e)
+        t1 = outer_scope.affect(self.steps)
+        self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 
     def visit_While(self, node):
         test = self.visit(node.test)
         outer_scope = self.current_scope
         inner_scope = Scope(outer_scope, [])
+        t0 = outer_scope.affect(self.steps)
         self.push_scope(inner_scope)
         inner_scope.add_effect(self.steps, self.steps + sympy.S.One)
         self.visit(node.body)
         self.pop_scope()
 
         # Compute effects of loop after `k` iterations
-        effects = {}
+        effects = {n: e for n, e in inner_scope._effects.items()}
+        effects_after_k = {}
         k = Dummy('k')
-        for nsymb, e in inner_scope._effects.items():
-            effects[nsymb] = repeated(nsymb, Dummy('i'), e, 1, k)
-        o = termination_function(test).subs(effects)
+        dependers = {n: [] for n, e in effects.items()}
+        depcount = {}
+        for n, e in effects.items():
+            c = 0
+            for dep in e.free_symbols:
+                if dep != n and dep in dependers:
+                    dependers[dep].append(n)
+                    c += 1
+            depcount[n] = c
+        while depcount:
+            n = next(n for n, d in depcount.items() if d == 0)
+            del depcount[n]
+            e = effects[n]
+            effects_after_k[n] = repeated(n, Dummy('i'), e.subs(effects_after_k), 1, k)
+            for dep in dependers[n]:
+                depcount[dep] -= 1
+        o = termination_function(test).subs(effects_after_k)
 
         # Compute number of iterations
         iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
+        effects = {}
+        for n, e in effects_after_k.items():
+            ee = e.subs(k, iterations)
+            self.log("%s_next = %s" % (n, inner_scope._effects[n]))
+            self.log("%s_k = %s" % (n, e))
+            self.log("%s' = %s" % (n, outer_scope.affect(ee)))
+            effects[n] = ee
         for n, e in effects.items():
-            ee = outer_scope.affect(e.subs(k, iterations))
-            self.log("%s = %s = %s = %s" % (n, e, e.subs(k, iterations), ee))
-            outer_scope.add_effect(n, ee)
-        self.log("%s iterations" % (iterations,))
+            outer_scope.add_effect(n, e)
+        t1 = outer_scope.affect(self.steps)
+        self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 
 
 def main():
