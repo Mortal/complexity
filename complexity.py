@@ -1,6 +1,7 @@
 import ast
 import sys
 import argparse
+import operator
 import collections
 
 import sympy
@@ -266,26 +267,21 @@ class Visitor(VisitorBase):
     def binop(self, left, op, right):
         if isinstance(op, ast.AST):
             op = type(op)
-        if op == ast.Add:
-            return left + right
-        elif op == ast.Sub:
-            return left - right
-        elif op == ast.Mult:
-            return left * right
-        elif op == ast.Div:
-            return left / right
-        elif op == ast.And:
-            return sympy.And(left, right)
-        elif op == ast.Lt:
-            return sympy.StrictLessThan(left, right)
-        elif op == ast.LtE:
-            return sympy.LessThan(left, right)
-        elif op == ast.Gt:
-            return sympy.StrictGreaterThan(left, right)
-        elif op == ast.GtE:
-            return sympy.GreaterThan(left, right)
-        else:
-            raise TypeError("Unknown op %s" % (op,))
+        operators = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.And: sympy.And,
+            ast.Lt: sympy.StrictLessThan,
+            ast.LtE: sympy.LessThan,
+            ast.Gt: sympy.StrictGreaterThan,
+            ast.GtE: sympy.GreaterThan,
+        }
+        try:
+            return operators[op](left, right)
+        except KeyError:
+            raise NotImplementedError("op %s" % (op,))
 
     def visit_AugAssign(self, node):
         target = node.target
