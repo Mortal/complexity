@@ -89,9 +89,9 @@ def whilewhile(n):
         i = i + 1
 
 def arith(n):
-    i = n
+    i = 37 * n
     s = 0
-    while i < 2 * n:
+    while i < 53 * n:
         s += i
         i += 1
     return s

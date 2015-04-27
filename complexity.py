@@ -211,7 +211,7 @@ class Visitor(VisitorBase):
         # print((' Function %s (line %s) ' % (node.name, node.lineno))
         #       .center(79, '='))
         self.push_scope(Scope(self.current_scope, [arg.arg for arg in node.args.args]))
-        self.steps = Dummy('steps')
+        self.steps = Dummy('T')
         self.current_scope.add_effect(self.steps, sympy.S.One)
         self.visit(node.body)
         def BigO(e):
