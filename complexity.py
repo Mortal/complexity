@@ -142,6 +142,9 @@ class Scope(object):
                 raise KeyError(name)
             return self._parent[name]
 
+    def set_effect(self, name, expr):
+        self._effects[name] = expr
+
     def add_effect(self, name, expr):
         if isinstance(name, ast.AST):
             raise TypeError("Try to add_effect on a %s" % (name,))
@@ -212,10 +215,13 @@ class Visitor(VisitorBase):
         self.current_scope.add_effect(self.steps, sympy.S.One)
         self.visit(node.body)
         def BigO(e):
-            return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo))
+            try:
+                return sympy.Order(e, (self.current_scope[node.args.args[0].arg], sympy.oo)).args[0]
+            except NotImplementedError:
+                return e
         self.log("Function %s: O(%s)" %
                  (node.name,
-                  BigO(self.current_scope.affect(self.steps),).args[0]))
+                  BigO(self.current_scope.affect(self.steps))))
         if self.current_scope.output is not None:
             print("Result: %s" % (self.current_scope.affect(self.current_scope.output),))
         # for n, e in self.current_scope._effects.items():
@@ -338,22 +344,26 @@ class Visitor(VisitorBase):
         k = Dummy('k')
         effects_after_k = {}
         for n, e in self.topological_order(inner_scope._effects):
-            ee = e.subs(effects_after_k)
-            effects_after_k[n] = repeated(n, Dummy('i'), ee, 1, k)
+            i = Dummy('i')
+            ee = e.subs(effects_after_k).subs(k, i)
+            effects_after_k[n] = outer_scope.affect(repeated(n, i, ee, 1, k))
             self.log("%s = %s = %s" % (n, ee, effects_after_k[n]))
         print(effects_after_k)
 
         o = termination_function(test).subs(effects_after_k)
 
         # Compute number of iterations
-        iterations = outer_scope.affect(sympy.solve(o, k, dict=True)[0][k])
+        try:
+            iterations = sympy.solve(o, k, dict=True)[0][k]
+        except:
+            raise NotImplementedError("Could not solve %s for %s" % (o, k))
         effects = {
             n: e.subs(k, iterations)
             for n, e in effects_after_k.items()
         }
         for n, e in effects.items():
-            self.log('%s = %s' % (n, outer_scope.affect(e)))
-            outer_scope.add_effect(n, e)
+            self.log('%s = %s' % (n, e))
+            outer_scope.set_effect(n, e)
         t1 = outer_scope.affect(self.steps)
         self.log("%s iterations, %s steps" % (iterations, t1 - t0))
 

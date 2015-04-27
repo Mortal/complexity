@@ -50,10 +50,10 @@ def Loop1(n):
     return s
 
 def Loop2(n):
-    i = 1
-    while i <= n:
+    i = 0
+    while i < n:
         j = i
-        while j > 1:
+        while j > 0:
             j = j / 2
         i = i + 1
 
@@ -87,3 +87,11 @@ def whilewhile(n):
         while j <= n:
             j = j + 1
         i = i + 1
+
+def arith(n):
+    i = n
+    s = 0
+    while i < 2 * n:
+        s += i
+        i += 1
+    return s
